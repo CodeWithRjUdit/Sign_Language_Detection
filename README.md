@@ -6,7 +6,7 @@ A real-time sign recognition prototype built with **MediaPipe Holistic**, **Tens
 - Thanks
 - I Love You
 
-It supports live webcam inference and uploaded-video inference.
+It supports live webcam inference, uploaded-video inference, and a Learn the Signs guide with animated demonstrations for the three labels.
 
 ## Streamlit Community Cloud deployment
 
@@ -55,10 +55,21 @@ The missing-pose fallback is set to 132 values (33 × 4), keeping every extracte
 5. Read the predicted sign and model confidence below the video.
 
 ### Upload a video
-1. Open the Upload a video tab.
+1. Open the Upload a clip tab.
 2. Upload a short MP4, MOV, AVI, or MKV clip.
 3. Use a 2–5 second clip with one sign clearly visible.
-4. Click Analyze video.
+4. Click Analyze this video.
+
+### Learn the signs
+Open the Learn the signs tab to view animated reference demonstrations and gesture descriptions for Hello, Thanks, and I Love You.
+
+**Language note:** The embedded reference demonstrations are for American Sign Language (ASL). ASL is not Indian Sign Language (ISL), and sign languages vary by region and community. The model was trained on the project's own recorded examples; the reference demonstrations are learning aids and are not guaranteed to match the exact gestures in that training set.
+
+Animated reference sources:
+- [Hello — AISA School](https://www.aisa.solutions/asl/signs/hello)
+- [Thank you — AISA School](https://www.aisa.solutions/asl/signs/thank-you)
+- [I love you — AISA School](https://www.aisa.solutions/asl/signs/i-love-you)
+
 
 ## Repository contents
 
