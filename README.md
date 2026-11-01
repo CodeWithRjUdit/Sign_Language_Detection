@@ -19,7 +19,7 @@ Open [Streamlit Community Cloud](https://share.streamlit.io/) and create an app 
 
 ## Run locally
 
-Use Python 3.11. Create a virtual environment, activate it, and install requirements.txt.
+Use Python 3.11. Create a virtual environment, activate it, and install requirements.txt. The deployment pins TensorFlow 2.16.1 with Keras 3.0.5 because the training notebook's saved model was produced with the Keras 3 API.
 
 Windows activation: .venv\Scripts\activate  
 macOS/Linux activation: source .venv/bin/activate
@@ -75,6 +75,7 @@ This prototype recognizes only the three classes represented in its training dat
 ## Deployment notes
 
 - Select Python 3.11 in the Community Cloud Advanced settings.
+- TensorFlow 2.16.1 uses Keras 3, matching the Keras 3 model-save format indicated by the original training notebook. Do not downgrade TensorFlow to 2.15.x for this saved model.
 - Streamlit Community Cloud uses the Python version selected in its deployment settings; runtime.txt is not used to select the version.
 - The browser must be allowed to access the camera for live inference.
 - Uploaded video is processed by the app. No API key is required.
