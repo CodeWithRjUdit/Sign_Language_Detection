@@ -28,7 +28,18 @@ MODEL_LOCK = threading.Lock()
 def load_model() -> Any:
     if not MODEL_PATH.exists():
         raise FileNotFoundError("Keep my_model.keras in the repository root.")
-    loaded = tf.keras.models.load_model(MODEL_PATH, compile=False)
+    # The saved notebook model serializes the built-in Orthogonal
+    # initializer with a legacy-style config. Register the built-in class
+    # explicitly so Keras 3 can deserialize the LSTM recurrent initializer.
+    keras_compat_objects = {
+        "Orthogonal": tf.keras.initializers.Orthogonal,
+        "keras.initializers>Orthogonal": tf.keras.initializers.Orthogonal,
+    }
+    loaded = tf.keras.models.load_model(
+        MODEL_PATH,
+        compile=False,
+        custom_objects=keras_compat_objects,
+    )
     shape = loaded.input_shape
     if len(shape) != 3 or tuple(shape[1:]) != (SEQUENCE_LENGTH, FEATURE_COUNT):
         raise ValueError(
