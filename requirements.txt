@@ -1,7 +1,9 @@
-# Select Python 3.11 in Streamlit Community Cloud Advanced settings.
+# Python 3.11 is selected in Streamlit Community Cloud Advanced settings.
+# TensorFlow 2.16 uses Keras 3, matching the .keras model saved by the training notebook.
 streamlit==1.51.0
 streamlit-webrtc==0.79.0
-tensorflow-cpu==2.15.1
+tensorflow-cpu==2.16.1
+keras==3.0.5
 mediapipe==0.10.14
 numpy==1.26.4
 protobuf==4.25.3
