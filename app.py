@@ -59,12 +59,9 @@ def load_model() -> Any:
                         # The saved model uses batch-major input (batch, time,
                         # features), so removing time_major=False preserves the
                         # model's data layout and computation.
-                        if (
-                            key == "time_major"
-                            and value.get("class_name") in {
-                                "LSTM", "GRU", "SimpleRNN", "RNN"
-                            }
-                        ):
+                        if key == "time_major":
+                            # This legacy argument only belonged to RNN layer
+                            # configs and was removed from Keras 3.
                             continue
                         normalized[key] = normalize_orthogonal(item)
                     return normalized
