@@ -52,10 +52,22 @@ def load_model() -> Any:
                         # The saved recurrent weights replace this initializer
                         # during loading; the canonical string is sufficient.
                         return "orthogonal"
-                    return {
-                        key: normalize_orthogonal(item)
-                        for key, item in value.items()
-                    }
+
+                    normalized = {}
+                    for key, item in value.items():
+                        # Keras 3 removed the legacy RNN time_major argument.
+                        # The saved model uses batch-major input (batch, time,
+                        # features), so removing time_major=False preserves the
+                        # model's data layout and computation.
+                        if (
+                            key == "time_major"
+                            and value.get("class_name") in {
+                                "LSTM", "GRU", "SimpleRNN", "RNN"
+                            }
+                        ):
+                            continue
+                        normalized[key] = normalize_orthogonal(item)
+                    return normalized
                 if isinstance(value, list):
                     return [normalize_orthogonal(item) for item in value]
                 return value
