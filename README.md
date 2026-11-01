@@ -52,7 +52,7 @@ The missing-pose fallback is set to 132 values (33 × 4), keeping every extracte
 2. Click Start and grant camera permission in your browser.
 3. Keep your upper body, face, and hands visible.
 4. Perform one of the three trained signs and hold it steadily for around 2–3 seconds.
-5. Read the predicted sign and model confidence below the video.
+5. Read the confirmed sign when the model is stable. When confidence is lower, the app also shows its current top candidate and probability without presenting it as a confirmed result.
 
 ### Upload a video
 1. Open the Upload a clip tab.
@@ -61,7 +61,7 @@ The missing-pose fallback is set to 132 values (33 × 4), keeping every extracte
 4. Click Analyze this video.
 
 ### Learn the signs
-Open the Learn the signs tab to view animated reference demonstrations and gesture descriptions for Hello, Thanks, and I Love You.
+Open the Learn the signs tab and choose Hello, Thanks, or I Love You from the selector. The app loads one animated reference at a time to reduce browser load, alongside its gesture description and source link.
 
 **Language note:** The embedded reference demonstrations are for American Sign Language (ASL). ASL is not Indian Sign Language (ISL), and sign languages vary by region and community. The model was trained on the project's own recorded examples; the reference demonstrations are learning aids and are not guaranteed to match the exact gestures in that training set.
 
