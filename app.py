@@ -4,12 +4,12 @@ import io
 import os
 
 # Keep numerical libraries from creating large thread pools on small cloud instances.
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
-os.environ.setdefault("TF_NUM_INTRAOP_THREADS", "1")
-os.environ.setdefault("TF_NUM_INTEROP_THREADS", "1")
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-os.environ.setdefault("MALLOC_ARENA_MAX", "2")
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ["TF_NUM_INTRAOP_THREADS"] = "1"
+os.environ["TF_NUM_INTEROP_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MALLOC_ARENA_MAX"] = "2"
 
 import shutil
 import tempfile
@@ -49,7 +49,7 @@ def build_trained_architecture():
         # TensorFlow may already have initialized its runtime.
         pass
 
-    """Recreate the architecture exactly as defined in the training notebook."""
+    # Recreate the architecture exactly as defined in the training notebook.
     model = tf.keras.Sequential(
         [
             tf.keras.layers.Input(shape=(SEQUENCE_LENGTH, FEATURE_COUNT)),
