@@ -481,6 +481,8 @@ with live_tab:
                 },
                 "controls": False,
                 "autoPlay": True,
+                "muted": True,
+                "playsInline": True,
             },
             async_processing=True,
         )
