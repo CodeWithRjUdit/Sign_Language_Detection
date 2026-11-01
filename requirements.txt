@@ -1,0 +1,8 @@
+# Select Python 3.11 in Streamlit Community Cloud Advanced settings.
+streamlit==1.51.0
+streamlit-webrtc==0.79.0
+tensorflow-cpu==2.15.1
+mediapipe==0.10.14
+numpy==1.26.4
+protobuf==4.25.3
+opencv-contrib-python==4.10.0.84
