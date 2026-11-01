@@ -173,8 +173,9 @@ def load_model() -> Any:
 def create_holistic_model():
     return mp.solutions.holistic.Holistic(
         static_image_mode=False,
-        # Complexity 0 is faster and more suitable for a CPU-hosted demo.
-        model_complexity=0,
+        # Complexity 1 uses the bundled full pose model and avoids
+        # MediaPipe's runtime download of the lite model into site-packages.
+        model_complexity=1,
         smooth_landmarks=True,
         enable_segmentation=False,
         min_detection_confidence=0.5,
