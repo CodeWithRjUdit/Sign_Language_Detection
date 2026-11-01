@@ -4,6 +4,7 @@ import io
 import shutil
 import tempfile
 import threading
+import time
 import zipfile
 from collections import Counter, deque
 from pathlib import Path
@@ -25,6 +26,8 @@ SEQUENCE_LENGTH = 30
 FEATURE_COUNT = 1662
 CONFIDENCE_THRESHOLD = 0.50
 PREDICTION_INTERVAL = 5
+MAX_INFERENCE_DIMENSION = 640
+CAMERA_TARGET_FPS = 15
 MODEL_LOCK = threading.Lock()
 
 
@@ -170,11 +173,26 @@ def load_model() -> Any:
 def create_holistic_model():
     return mp.solutions.holistic.Holistic(
         static_image_mode=False,
-        model_complexity=1,
+        # Complexity 0 is faster and more suitable for a CPU-hosted demo.
+        model_complexity=0,
         smooth_landmarks=True,
         enable_segmentation=False,
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5,
+    )
+
+
+def resize_for_inference(rgb: np.ndarray) -> np.ndarray:
+    """Downscale video frames before MediaPipe to reduce CPU and memory use."""
+    height, width = rgb.shape[:2]
+    longest_side = max(height, width)
+    if longest_side <= MAX_INFERENCE_DIMENSION:
+        return rgb
+
+    scale = MAX_INFERENCE_DIMENSION / float(longest_side)
+    new_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+    return np.asarray(
+        Image.fromarray(rgb).resize(new_size, Image.Resampling.BILINEAR)
     )
 
 
@@ -250,20 +268,43 @@ class SignLanguageProcessor(VideoProcessorBase):
         self.prediction_history = deque(maxlen=5)
         self.probability_history = deque(maxlen=5)
         self.frame_count = 0
+        self.process_interval = 1.0 / CAMERA_TARGET_FPS
+        self.last_process_time = 0.0
+        self.last_output = None
         self.lock = threading.Lock()
         self.status = {
             "label": None,
             "confidence": 0.0,
             "probabilities": np.zeros(len(ACTIONS), dtype=np.float32),
+            "frames_collected": 0,
             "message": "Waiting for camera frames",
         }
 
     def get_status(self):
         with self.lock:
-            return {**self.status, "probabilities": self.status["probabilities"].copy()}
+            return {
+                **self.status,
+                "probabilities": self.status["probabilities"].copy(),
+            }
+
+    def _video_frame(self, rgb: np.ndarray) -> av.VideoFrame:
+        self.last_output = rgb
+        return av.VideoFrame.from_ndarray(rgb, format="rgb24")
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+        now = time.monotonic()
+
+        # Drop excess incoming frames instead of building a processing backlog.
+        # Re-send the latest small preview while waiting for the next inference slot.
+        if (
+            self.last_output is not None
+            and now - self.last_process_time < self.process_interval
+        ):
+            return av.VideoFrame.from_ndarray(self.last_output, format="rgb24")
+
+        self.last_process_time = now
         rgb = frame.to_ndarray(format="rgb24")
+        rgb = resize_for_inference(rgb)
         results = self.holistic.process(rgb)
         self.frame_count += 1
 
@@ -276,13 +317,18 @@ class SignLanguageProcessor(VideoProcessorBase):
                     "label": None,
                     "confidence": 0.0,
                     "probabilities": np.zeros(len(ACTIONS), dtype=np.float32),
+                    "frames_collected": 0,
                     "message": "No person detected — move into camera view",
                 }
-            return av.VideoFrame.from_ndarray(
-                overlay(rgb, "Move into the camera view"), format="rgb24"
-            )
+            return self._video_frame(overlay(rgb, "Move into the camera view"))
 
         self.sequence.append(extract_keypoints(results))
+        with self.lock:
+            self.status["frames_collected"] = len(self.sequence)
+            if len(self.sequence) < SEQUENCE_LENGTH:
+                self.status["message"] = (
+                    f"Preparing sequence: {len(self.sequence)}/{SEQUENCE_LENGTH} frames"
+                )
 
         if (
             len(self.sequence) == SEQUENCE_LENGTH
@@ -294,27 +340,29 @@ class SignLanguageProcessor(VideoProcessorBase):
             average = np.mean(np.stack(self.probability_history), axis=0)
             voted_index, votes = Counter(self.prediction_history).most_common(1)[0]
             confidence = float(average[voted_index])
+
             if votes >= 3 and confidence >= CONFIDENCE_THRESHOLD:
-                label, message = ACTIONS[voted_index], "Recognized sign"
+                label, message = ACTIONS[voted_index], "Sign recognized"
             else:
                 label, message = None, "Analyzing — hold the sign steady"
+
             with self.lock:
                 self.status = {
                     "label": label,
                     "confidence": confidence,
                     "probabilities": average,
+                    "frames_collected": len(self.sequence),
                     "message": message,
                 }
 
         current = self.get_status()
-        headline = (
-            f"Collecting frames: {len(self.sequence)}/{SEQUENCE_LENGTH}"
-            if len(self.sequence) < SEQUENCE_LENGTH
-            else current["message"]
-        )
-        return av.VideoFrame.from_ndarray(
-            overlay(rgb, headline, current["label"], current["confidence"]),
-            format="rgb24",
+        if len(self.sequence) < SEQUENCE_LENGTH:
+            headline = f"Preparing: {len(self.sequence)}/{SEQUENCE_LENGTH} frames"
+        else:
+            headline = current["message"]
+
+        return self._video_frame(
+            overlay(rgb, headline, current["label"], current["confidence"])
         )
 
 
@@ -333,6 +381,7 @@ def analyze_uploaded_video(video_bytes: bytes, model, progress):
         with create_holistic_model() as holistic:
             for frame in container.decode(stream):
                 rgb = frame.to_ndarray(format="rgb24")
+                rgb = resize_for_inference(rgb)
                 results = holistic.process(rgb)
                 frame_count += 1
                 if has_landmarks(results):
@@ -380,6 +429,13 @@ st.write(
     "classifies each 30-frame sequence."
 )
 st.caption("Available classes: Hello · Thanks · I Love You")
+st.markdown(
+    """<style>
+    [data-testid="stVideo"], video { max-width: 100%; }
+    div[data-testid="stMetric"] { padding: 0.25rem 0; }
+    </style>""",
+    unsafe_allow_html=True,
+)
 
 try:
     model = load_model()
@@ -394,38 +450,86 @@ live_tab, upload_tab, about_tab = st.tabs(
 with live_tab:
     st.subheader("Live sign recognition")
     st.write(
-        "Click START and allow camera access. Keep your face, upper body, "
-        "and hands visible. Hold one sign steadily for about 1–2 seconds."
+        "Start the camera, allow browser access, then keep your face, upper "
+        "body, and hands visible. Hold one sign steadily for 2–3 seconds."
     )
-    context = webrtc_streamer(
-        key="sign-language-live-camera",
-        video_processor_factory=lambda: SignLanguageProcessor(model),
-        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-        media_stream_constraints={"video": True, "audio": False},
-        async_processing=True,
-    )
+
+    camera_col, result_col = st.columns([1.15, 0.85], gap="large")
+    with camera_col:
+        context = webrtc_streamer(
+            key="sign-language-live-camera",
+            video_processor_factory=lambda: SignLanguageProcessor(model),
+            rtc_configuration={
+                "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+            },
+            media_stream_constraints={
+                "video": {
+                    "width": {"ideal": 640},
+                    "height": {"ideal": 480},
+                    "frameRate": {"ideal": CAMERA_TARGET_FPS, "max": 20},
+                },
+                "audio": False,
+            },
+            video_html_attrs={
+                "style": {
+                    "width": "100%",
+                    "maxWidth": "520px",
+                    "height": "auto",
+                    "margin": "0 auto",
+                    "borderRadius": "12px",
+                    "objectFit": "contain",
+                },
+                "controls": False,
+                "autoPlay": True,
+            },
+            async_processing=True,
+        )
 
     @st.fragment(run_every="1s")
     def show_live_status(webrtc_context):
         processor = webrtc_context.video_processor if webrtc_context else None
         if processor is None:
-            st.info("Start the camera above. The prediction will appear here.")
+            st.info("Camera is off. Press START in the preview to begin.")
             return
-        status = processor.get_status()
-        first, second = st.columns(2)
-        first.metric("Recognized sign", status["label"] or "—")
-        second.metric(
-            "Model confidence",
-            f'{status["confidence"]:.1%}' if status["label"] else "—",
-        )
-        st.caption(status["message"])
-        chart_data = {
-            ACTIONS[i]: float(status["probabilities"][i])
-            for i in range(len(ACTIONS))
-        }
-        st.bar_chart(chart_data, y_label="Model probability")
 
-    show_live_status(context)
+        status = processor.get_status()
+        st.metric("Recognized sign", status["label"] or "Listening…")
+        st.caption(status["message"])
+        st.progress(
+            min(status["frames_collected"] / SEQUENCE_LENGTH, 1.0),
+            text=f'Frame sequence: {status["frames_collected"]}/{SEQUENCE_LENGTH}',
+        )
+
+        if status["label"]:
+            st.success(f'{status["label"]} detected')
+            st.metric("Model confidence", f'{status["confidence"]:.1%}')
+        else:
+            st.caption(
+                "A result appears after the model has collected enough frames "
+                "and found a stable prediction."
+            )
+
+        with st.expander("Show class probabilities"):
+            chart_data = {
+                ACTIONS[i]: float(status["probabilities"][i])
+                for i in range(len(ACTIONS))
+            }
+            st.bar_chart(chart_data, y_label="Model probability")
+
+    with result_col:
+        st.subheader("Live result")
+        show_live_status(context)
+        st.markdown("**Tips for better recognition**")
+        st.markdown(
+            "- Face the camera with your upper body in view.\n"
+            "- Keep both hands inside the frame.\n"
+            "- Use steady lighting and a plain background.\n"
+            "- Hold one sign for 2–3 seconds before changing it."
+        )
+        st.caption(
+            "For smoother performance, the app uses a smaller camera frame "
+            "and processes up to 15 frames per second."
+        )
 
 with upload_tab:
     st.subheader("Analyze a recorded sign")
