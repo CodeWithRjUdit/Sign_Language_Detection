@@ -539,39 +539,71 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-model = None
-model_error = None
-try:
-    model = load_model()
-except Exception as exc:
-    model_error = str(exc)
-
-if model is None:
-    with st.container(border=True):
-        st.warning(
-            "Preview mode: the sign guide is available, but live recognition "
-            "and video analysis are paused because the trained model did not load."
-        )
-        with st.expander("View model-loading details"):
-            st.code(model_error or "Unknown model-loading error.")
-
 st.markdown(
     """
     <div class="section-kicker">Your sign recognition workspace</div>
-    <div class="section-heading">Choose how you want to try it</div>
+    <div class="section-heading">Choose a workspace</div>
     <div class="section-subtitle">
-      Use your webcam for an interactive session, upload a recorded clip,
-      or learn the three reference signs before testing the model.
+      The learning guide opens first. Start the AI engine only when you want
+      to use the webcam or analyze a recorded clip.
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-live_tab, upload_tab, learn_tab, about_tab = st.tabs(
-    ["📷  Live camera", "🎞️  Upload a clip", "🤟  Learn the signs", "ⓘ  About"]
+active_view = st.radio(
+    "Workspace",
+    options=["Live camera", "Upload a clip", "Learn the signs", "About"],
+    index=2,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="workspace_view",
 )
 
-with live_tab:
+if "recognition_enabled" not in st.session_state:
+    st.session_state["recognition_enabled"] = False
+
+# TensorFlow and the trained model are loaded only when recognition is requested.
+model = None
+model_error = None
+if active_view in {"Live camera", "Upload a clip"}:
+    if not st.session_state["recognition_enabled"]:
+        st.info(
+            "The AI engine is not loaded yet. Loading it uses additional memory. "
+            "The learning guide does not need the AI engine."
+        )
+        if st.button(
+            "Load AI recognition engine",
+            type="primary",
+            key="load_recognition_engine",
+        ):
+            st.session_state["recognition_enabled"] = True
+            st.rerun()
+    else:
+        try:
+            with st.spinner("Loading the trained sign-recognition model..."):
+                model = load_model()
+        except Exception as exc:
+            model_error = str(exc)
+            st.error("The trained model could not be loaded.")
+            with st.expander("View model-loading details"):
+                st.code(model_error)
+
+if st.session_state["recognition_enabled"]:
+    unload_col, status_col = st.columns([1, 3], vertical_alignment="center")
+    with unload_col:
+        if st.button("Unload AI engine", key="unload_recognition_engine"):
+            st.session_state["recognition_enabled"] = False
+            st.cache_resource.clear()
+            import gc
+            gc.collect()
+            st.rerun()
+    with status_col:
+        st.caption(
+            "Unload the model when you finish testing to release its cached resources."
+        )
+
+if active_view == "Live camera":
     st.markdown(
         """
         <div class="section-kicker">Live recognition</div>
@@ -713,7 +745,7 @@ with live_tab:
             unsafe_allow_html=True,
         )
 
-with upload_tab:
+elif active_view == "Upload a clip":
     st.markdown(
         """
         <div class="section-kicker">Video analysis</div>
@@ -785,7 +817,7 @@ with upload_tab:
             progress.empty()
             st.error(f"Could not analyze this video: {exc}")
 
-with learn_tab:
+elif active_view == "Learn the signs":
     st.markdown(
         """
         <div class="section-kicker">Quick sign guide</div>
@@ -897,7 +929,7 @@ with learn_tab:
         "the sign you intended."
     )
 
-with about_tab:
+else:
     st.markdown(
         """
         <div class="section-kicker">Under the hood</div>
