@@ -31,60 +31,120 @@ MODEL_LOCK = threading.Lock()
 def load_model() -> Any:
     if not MODEL_PATH.exists():
         raise FileNotFoundError("Keep my_model.keras in the repository root.")
-    # Older .keras archives may serialize built-in initializers with
-    # legacy metadata (module/registered_name/shared_object_id) that some
-    # Keras 3 loaders do not accept through initializers.get(). Normalize
-    # only the Orthogonal initializer in a temporary copy of config.json.
-    # The stored model.weights.h5 file is copied byte-for-byte.
+
+    # First try standard whole-model deserialization after normalizing legacy
+    # initializer metadata and the removed RNN time_major option.
+    standard_error = None
     with tempfile.TemporaryDirectory(prefix="sign_model_") as temp_dir:
-        with zipfile.ZipFile(MODEL_PATH, "r") as source_zip:
-            names = source_zip.namelist()
-            if "config.json" not in names:
-                raise ValueError("The .keras archive does not contain config.json.")
-            config = json.loads(source_zip.read("config.json").decode("utf-8"))
+        try:
+            with zipfile.ZipFile(MODEL_PATH, "r") as source_zip:
+                names = source_zip.namelist()
+                if "config.json" not in names:
+                    raise ValueError("The .keras archive does not contain config.json.")
+                config = json.loads(source_zip.read("config.json").decode("utf-8"))
 
-            def normalize_orthogonal(value):
-                if isinstance(value, dict):
-                    if (
-                        value.get("class_name") == "Orthogonal"
-                        and str(value.get("module", "")).startswith("keras.initializers")
-                    ):
-                        # The saved recurrent weights replace this initializer
-                        # during loading; the canonical string is sufficient.
-                        return "orthogonal"
+                def normalize_legacy_config(value):
+                    if isinstance(value, dict):
+                        if (
+                            value.get("class_name") == "Orthogonal"
+                            and str(value.get("module", "")).startswith("keras.initializers")
+                        ):
+                            return "orthogonal"
+                        normalized = {}
+                        for key, item in value.items():
+                            if key == "time_major":
+                                continue
+                            normalized[key] = normalize_legacy_config(item)
+                        return normalized
+                    if isinstance(value, list):
+                        return [normalize_legacy_config(item) for item in value]
+                    return value
 
-                    normalized = {}
-                    for key, item in value.items():
-                        # Keras 3 removed the legacy RNN time_major argument.
-                        # The saved model uses batch-major input (batch, time,
-                        # features), so removing time_major=False preserves the
-                        # model's data layout and computation.
-                        if key == "time_major":
-                            # This legacy argument only belonged to RNN layer
-                            # configs and was removed from Keras 3.
-                            continue
-                        normalized[key] = normalize_orthogonal(item)
-                    return normalized
-                if isinstance(value, list):
-                    return [normalize_orthogonal(item) for item in value]
-                return value
+                repaired_config = normalize_legacy_config(config)
+                repaired_path = Path(temp_dir) / "model_compatible.keras"
+                with zipfile.ZipFile(
+                    repaired_path, "w", compression=zipfile.ZIP_DEFLATED
+                ) as repaired_zip:
+                    for item in source_zip.infolist():
+                        contents = source_zip.read(item.filename)
+                        if item.filename == "config.json":
+                            contents = json.dumps(repaired_config).encode("utf-8")
+                        repaired_zip.writestr(item, contents)
 
-            repaired_config = normalize_orthogonal(config)
-            repaired_model_path = Path(temp_dir) / "model_compatible.keras"
+                weight_members = [
+                    name for name in names
+                    if name.endswith(".h5") and "weights" in name.lower()
+                ]
+                if not weight_members:
+                    weight_members = [name for name in names if name.endswith(".h5")]
 
-            with zipfile.ZipFile(
-                repaired_model_path, "w", compression=zipfile.ZIP_DEFLATED
-            ) as repaired_zip:
-                for item in source_zip.infolist():
-                    contents = source_zip.read(item.filename)
-                    if item.filename == "config.json":
-                        contents = json.dumps(repaired_config).encode("utf-8")
-                    repaired_zip.writestr(item, contents)
+                if not weight_members:
+                    raise ValueError(
+                        "The .keras archive contains no HDF5 weight file."
+                    )
 
-        loaded = tf.keras.models.load_model(
-            repaired_model_path,
-            compile=False,
-        )
+                extracted_weights = Path(temp_dir) / "restored.weights.h5"
+                extracted_weights.write_bytes(source_zip.read(weight_members[0]))
+
+            try:
+                loaded = tf.keras.models.load_model(
+                    repaired_path,
+                    compile=False,
+                )
+            except Exception as exc:
+                standard_error = exc
+                # The notebook defines this exact Sequential architecture.
+                # Rebuilding it explicitly allows Keras to load the embedded
+                # HDF5 weight file by layer topology rather than the serialized
+                # object graph that failed above.
+                loaded = tf.keras.Sequential(
+                    [
+                        tf.keras.layers.Input(shape=(SEQUENCE_LENGTH, FEATURE_COUNT)),
+                        tf.keras.layers.LSTM(
+                            64, return_sequences=True, activation="relu", name="lstm_3"
+                        ),
+                        tf.keras.layers.LSTM(
+                            128, return_sequences=True, activation="relu", name="lstm_4"
+                        ),
+                        tf.keras.layers.LSTM(
+                            64, return_sequences=False, activation="relu", name="lstm_5"
+                        ),
+                        tf.keras.layers.Dense(64, activation="relu", name="dense_3"),
+                        tf.keras.layers.Dense(32, activation="relu", name="dense_4"),
+                        tf.keras.layers.Dense(
+                            len(ACTIONS), activation="softmax", name="dense_5"
+                        ),
+                    ],
+                    name="sequential_1",
+                )
+                loaded.load_weights(extracted_weights)
+
+        except Exception as archive_error:
+            # Some copies of this project also contain actions.h5. It may be
+            # an earlier full-model HDF5 export, so use it as a final fallback.
+            legacy_path = ROOT / "actions.h5"
+            if legacy_path.exists():
+                try:
+                    loaded = tf.keras.models.load_model(
+                        legacy_path,
+                        compile=False,
+                    )
+                except Exception as legacy_error:
+                    raise RuntimeError(
+                        "Could not load my_model.keras using either whole-model "
+                        "deserialization or the notebook's explicit LSTM "
+                        "architecture/embedded weights. The actions.h5 fallback "
+                        f"also failed. Standard loader: {standard_error!r}; "
+                        f"weight/archive loader: {archive_error!r}; "
+                        f"actions.h5 loader: {legacy_error!r}"
+                    ) from legacy_error
+            else:
+                raise RuntimeError(
+                    "Could not load my_model.keras. "
+                    f"Whole-model loader: {standard_error!r}; "
+                    f"archive/weight loader: {archive_error!r}"
+                ) from archive_error
+
     shape = loaded.input_shape
     if len(shape) != 3 or tuple(shape[1:]) != (SEQUENCE_LENGTH, FEATURE_COUNT):
         raise ValueError(
@@ -92,7 +152,9 @@ def load_model() -> Any:
             f"but found {shape}."
         )
     if int(loaded.output_shape[-1]) != len(ACTIONS):
-        raise ValueError("The model output count does not match the action labels.")
+        raise ValueError(
+            f"Expected three output classes, but found {loaded.output_shape[-1]}."
+        )
     return loaded
 
 
