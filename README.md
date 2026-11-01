@@ -6,7 +6,7 @@ A real-time sign recognition prototype built with **MediaPipe Holistic**, **Tens
 - Thanks
 - I Love You
 
-It supports live webcam inference, uploaded-video inference, and a Learn the Signs guide with animated demonstrations for the three labels.
+It supports live webcam inference, uploaded-video inference, and a Learn the Signs guide with animated demonstrations for the three labels. The guide opens first without loading TensorFlow or MediaPipe; the recognition engine is loaded only when the user explicitly starts a recognition mode.
 
 ## Streamlit Community Cloud deployment
 
@@ -19,7 +19,7 @@ Open [Streamlit Community Cloud](https://share.streamlit.io/) and create an app 
 
 ## Run locally
 
-Use Python 3.11. Create a virtual environment, activate it, and install requirements.txt. The deployment pins TensorFlow 2.16.1 with Keras 3.0.5 because the training notebook's saved model was produced with the Keras 3 API.
+Use Python 3.11. Create a virtual environment, activate it, and install requirements.txt. The deployment pins TensorFlow 2.16.1 with Keras 3.0.5 because the training notebook's saved model was produced with the Keras 3 API. Streamlit is pinned to 1.66.1.
 
 Windows activation: .venv\Scripts\activate  
 macOS/Linux activation: source .venv/bin/activate
@@ -55,10 +55,13 @@ The missing-pose fallback is set to 132 values (33 × 4), keeping every extracte
 5. Read the confirmed sign when the model is stable. When confidence is lower, the app also shows its current top candidate and probability without presenting it as a confirmed result.
 
 ### Upload a video
-1. Open the Upload a clip tab.
-2. Upload a short MP4, MOV, AVI, or MKV clip.
-3. Use a 2–5 second clip with one sign clearly visible.
-4. Click Analyze this video.
+1. Choose the Upload a clip workspace.
+2. Click **Load AI recognition engine** if it is not already loaded.
+3. Upload a short MP4, MOV, AVI, or MKV clip (maximum upload size: 25 MB).
+4. Use a 2–5 second clip with one sign clearly visible.
+5. Click Analyze this video.
+
+Use either live camera or uploaded-video inference at a time. Choose **Unload AI engine** after testing to clear the cached model.
 
 ### Learn the signs
 Open the Learn the signs tab and choose Hello, Thanks, or I Love You from the selector. The app loads one animated reference at a time to reduce browser load, alongside its gesture description and source link.
@@ -81,7 +84,7 @@ Animated reference sources:
 
 ## Live camera performance
 
-The live camera preview is constrained to a compact display (maximum 520 px wide). The browser is asked for a 640 × 480 camera stream at approximately 15 FPS (up to 20 FPS). Before landmark extraction, frames are resized so their longest side is at most 640 px. MediaPipe Holistic uses pose model complexity 1 (the bundled full model) to avoid a runtime model download into the read-only package directory, and the processor drops excess incoming frames rather than allowing a processing backlog to build up. These settings improve responsiveness on CPU-based hosting; actual frame rate still depends on available server resources and network conditions.
+The live camera preview is constrained to a compact display. The browser is asked for a 480 × 360 camera stream at approximately 8 FPS (up to 10 FPS). Before landmark extraction, frames are resized so their longest side is at most 480 px. MediaPipe Holistic uses pose model complexity 1 (the bundled full model) to avoid a runtime model download into the read-only package directory, and the processor drops excess incoming frames rather than allowing a processing backlog to build up. These settings improve responsiveness on CPU-based hosting; actual frame rate still depends on available server resources and network conditions.
 
 ## Limitations
 
@@ -90,6 +93,9 @@ This prototype recognizes only the three classes represented in its training dat
 ## Deployment notes
 
 - Select Python 3.11 in the Community Cloud Advanced settings.
+- The app opens on the lightweight Learn the signs workspace. TensorFlow and MediaPipe are imported only after the AI recognition engine is requested.
+- Only the currently selected workspace is rendered; do not run live camera and uploaded-video inference simultaneously.
+- The webcam is intentionally configured for a lower-resolution, lower-FPS stream to reduce CPU and memory pressure.
 - TensorFlow 2.16.1 uses Keras 3, matching the Keras 3 model-save format indicated by the original training notebook. Do not downgrade TensorFlow to 2.15.x for this saved model.
 - Streamlit Community Cloud uses the Python version selected in its deployment settings; runtime.txt is not used to select the version.
 - The browser must be allowed to access the camera for live inference.
