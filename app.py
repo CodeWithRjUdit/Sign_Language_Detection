@@ -1,6 +1,16 @@
 from __future__ import annotations
 
 import io
+import os
+
+# Keep numerical libraries from creating large thread pools on small cloud instances.
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+os.environ.setdefault("TF_NUM_INTRAOP_THREADS", "1")
+os.environ.setdefault("TF_NUM_INTEROP_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MALLOC_ARENA_MAX", "2")
+
 import shutil
 import tempfile
 import threading
@@ -11,11 +21,8 @@ from pathlib import Path
 from typing import Any
 
 import av
-import h5py
-import mediapipe as mp
 import numpy as np
 import streamlit as st
-import tensorflow as tf
 from PIL import Image, ImageDraw
 from streamlit_webrtc import VideoProcessorBase, webrtc_streamer
 
@@ -26,12 +33,22 @@ SEQUENCE_LENGTH = 30
 FEATURE_COUNT = 1662
 CONFIDENCE_THRESHOLD = 0.50
 PREDICTION_INTERVAL = 5
-MAX_INFERENCE_DIMENSION = 640
-CAMERA_TARGET_FPS = 15
+MAX_INFERENCE_DIMENSION = 480
+CAMERA_TARGET_FPS = 8
 MODEL_LOCK = threading.Lock()
 
 
 def build_trained_architecture():
+    """Import TensorFlow only when the user starts recognition."""
+    import tensorflow as tf
+
+    try:
+        tf.config.threading.set_intra_op_parallelism_threads(1)
+        tf.config.threading.set_inter_op_parallelism_threads(1)
+    except RuntimeError:
+        # TensorFlow may already have initialized its runtime.
+        pass
+
     """Recreate the architecture exactly as defined in the training notebook."""
     model = tf.keras.Sequential(
         [
@@ -60,6 +77,8 @@ def build_trained_architecture():
 
 def load_weights_file(model, source_path: Path, temp_dir: str):
     """Load either modern Keras 3 weights or legacy full-model HDF5 weights."""
+    import h5py
+
     if not h5py.is_hdf5(source_path):
         with open(source_path, "rb") as file_handle:
             header = file_handle.read(16)
@@ -89,6 +108,8 @@ def load_weights_file(model, source_path: Path, temp_dir: str):
 
 @st.cache_resource(show_spinner="Loading the trained LSTM model...")
 def load_model() -> Any:
+    import h5py
+
     if not MODEL_PATH.exists():
         raise FileNotFoundError("Keep my_model.keras in the repository root.")
 
@@ -171,6 +192,9 @@ def load_model() -> Any:
 
 
 def create_holistic_model():
+    # MediaPipe is loaded only after the user explicitly starts a recognition mode.
+    import mediapipe as mp
+
     return mp.solutions.holistic.Holistic(
         static_image_mode=False,
         # Complexity 1 uses the bundled full pose model and avoids
