@@ -422,19 +422,84 @@ def analyze_uploaded_video(video_bytes: bytes, model, progress):
     }
 
 
-st.set_page_config(page_title="Sign Language Detection", page_icon="🤟", layout="wide")
-st.title("🤟 Sign Language Detection")
-st.write(
-    "Recognize three trained signs from a live webcam or a short video. "
-    "MediaPipe extracts body, face, and hand landmarks; a trained LSTM "
-    "classifies each 30-frame sequence."
+st.set_page_config(
+    page_title="Sign Language Studio",
+    page_icon="🤟",
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
-st.caption("Available classes: Hello · Thanks · I Love You")
+
 st.markdown(
-    """<style>
-    [data-testid="stVideo"], video { max-width: 100%; }
-    div[data-testid="stMetric"] { padding: 0.25rem 0; }
-    </style>""",
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap');
+    :root { --ink:#142033; --muted:#64748b; --line:#e7edf5; --blue:#3568f5; }
+    html, body, [class*="css"] { font-family:'DM Sans',sans-serif; }
+    .stApp {
+      background: radial-gradient(circle at 8% 0%,rgba(53,104,245,.08),transparent 27rem),
+                  radial-gradient(circle at 94% 6%,rgba(22,184,166,.07),transparent 24rem),#f6f8fc;
+      color:var(--ink);
+    }
+    .block-container {max-width:1320px;padding-top:1.55rem;padding-bottom:3rem;}
+    [data-testid="stHeader"] {background:transparent;}
+    [data-testid="stTabs"] {margin-top:.55rem;}
+    [data-testid="stTab"] {font-weight:700;padding-top:.85rem;padding-bottom:.85rem;}
+    [data-testid="stMetric"] {background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:0 5px 20px rgba(20,32,51,.035);}
+    [data-testid="stMetricLabel"] {color:#64748b;font-weight:600;}
+    [data-testid="stMetricValue"] {color:#142033;font-family:'Manrope',sans-serif;}
+    div[data-testid="stButton"] button {border-radius:12px;font-weight:700;min-height:2.8rem;}
+    div[data-testid="stFileUploader"] {border:1px dashed #cbd5e1;border-radius:16px;padding:.7rem;background:#fbfdff;}
+    .hero {position:relative;overflow:hidden;padding:2rem 2.1rem;border-radius:26px;color:#fff;background:linear-gradient(118deg,#101d38 0%,#183568 53%,#116b75 100%);box-shadow:0 18px 50px rgba(24,53,104,.18);margin-bottom:1.15rem;}
+    .hero:after {content:"";position:absolute;width:330px;height:330px;right:-80px;top:-180px;border-radius:50%;border:1px solid rgba(255,255,255,.17);box-shadow:0 0 0 35px rgba(255,255,255,.035),0 0 0 75px rgba(255,255,255,.025);}
+    .hero-kicker {display:inline-flex;align-items:center;gap:.45rem;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.09);border-radius:99px;padding:.32rem .72rem;color:#d9e8ff;font-size:.76rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
+    .hero h1 {font-family:'Manrope',sans-serif;color:#fff;font-size:clamp(2rem,4vw,3.25rem);line-height:1.1;letter-spacing:-.045em;margin:.9rem 0 .55rem;font-weight:800;}
+    .hero p {color:#d8e5f7;font-size:1.03rem;max-width:720px;margin:0;line-height:1.65;}
+    .hero-foot {margin-top:1.3rem;display:flex;flex-wrap:wrap;gap:.55rem;}
+    .hero-chip {padding:.38rem .72rem;border-radius:99px;background:rgba(255,255,255,.1);color:#edf5ff;border:1px solid rgba(255,255,255,.13);font-size:.82rem;font-weight:600;}
+    .section-kicker {color:#3568f5;font-size:.72rem;text-transform:uppercase;letter-spacing:.11em;font-weight:800;margin-bottom:.25rem;}
+    .section-heading {font-family:'Manrope',sans-serif;color:#142033;font-size:1.35rem;font-weight:800;letter-spacing:-.025em;margin:0 0 .35rem;}
+    .section-subtitle {color:#64748b;font-size:.92rem;line-height:1.55;margin:0 0 .9rem;}
+    .soft-panel {background:#fff;border:1px solid #e7edf5;border-radius:18px;padding:1rem 1.1rem;box-shadow:0 6px 22px rgba(20,32,51,.035);}
+    .note-panel {border-left:4px solid #f0b44b;background:#fffaf0;color:#73521b;border-radius:12px;padding:.85rem 1rem;line-height:1.55;font-size:.88rem;}
+    .sign-card {background:#fff;border:1px solid #e7edf5;border-radius:20px;overflow:hidden;box-shadow:0 8px 26px rgba(20,32,51,.045);height:100%;}
+    .sign-gif-wrap {display:flex;justify-content:center;align-items:center;background:#f1f5fb;padding:.75rem;min-height:270px;border-bottom:1px solid #e7edf5;}
+    .sign-gif-wrap img {display:block;width:100%;max-width:245px;height:300px;object-fit:contain;border-radius:12px;background:#fff;}
+    .sign-card-body {padding:1rem 1.1rem 1.15rem;}
+    .sign-card-body h3 {color:#142033;font-family:'Manrope',sans-serif;font-size:1.15rem;margin:0 0 .2rem;font-weight:800;}
+    .sign-meaning {color:#3568f5;font-weight:700;font-size:.82rem;margin-bottom:.65rem;}
+    .sign-card-body p {color:#526176;font-size:.88rem;line-height:1.55;margin:.3rem 0;}
+    .demo-link {display:inline-block;margin-top:.7rem;color:#2757d8!important;font-size:.84rem;font-weight:800;text-decoration:none;}
+    .demo-link:hover {text-decoration:underline;}
+    .footer-note {color:#8190a4;font-size:.78rem;text-align:center;padding-top:.6rem;}
+    @media(max-width:700px) {
+      .block-container {padding-left:1rem;padding-right:1rem;}
+      .hero {padding:1.45rem 1.25rem;border-radius:20px;}
+      .sign-gif-wrap {min-height:210px;}
+      .sign-gif-wrap img {height:235px;}
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <section class="hero">
+      <div class="hero-kicker">🤟 &nbsp; Computer vision · Sequence learning</div>
+      <h1>Sign Language Studio</h1>
+      <p>
+        A camera-based sign recognition demo powered by MediaPipe Holistic
+        and your trained LSTM model. Make a sign, hold it in view, and see
+        what the model recognises.
+      </p>
+      <div class="hero-foot">
+        <span class="hero-chip">Hello</span>
+        <span class="hero-chip">Thanks</span>
+        <span class="hero-chip">I Love You</span>
+        <span class="hero-chip">30-frame sequence model</span>
+      </div>
+    </section>
+    """,
     unsafe_allow_html=True,
 )
 
@@ -444,156 +509,347 @@ except Exception as exc:
     st.error(f"The trained model could not be loaded: {exc}")
     st.stop()
 
-live_tab, upload_tab, about_tab = st.tabs(
-    ["📷 Live camera", "🎞️ Upload a video", "ℹ️ About"]
+st.markdown(
+    """
+    <div class="section-kicker">Your sign recognition workspace</div>
+    <div class="section-heading">Choose how you want to try it</div>
+    <div class="section-subtitle">
+      Use your webcam for an interactive session, upload a recorded clip,
+      or learn the three reference signs before testing the model.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+live_tab, upload_tab, learn_tab, about_tab = st.tabs(
+    ["📷  Live camera", "🎞️  Upload a clip", "🤟  Learn the signs", "ⓘ  About"]
 )
 
 with live_tab:
-    st.subheader("Live sign recognition")
-    st.write(
-        "Start the camera, allow browser access, then keep your face, upper "
-        "body, and hands visible. Hold one sign steadily for 2–3 seconds."
+    st.markdown(
+        """
+        <div class="section-kicker">Live recognition</div>
+        <div class="section-heading">Try a sign in front of your camera</div>
+        <div class="section-subtitle">
+          Press START, allow camera access, then keep your face, upper body,
+          and signing hand clearly visible.
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    camera_col, result_col = st.columns([1.15, 0.85], gap="large")
+    camera_col, result_col = st.columns([1.12, 0.88], gap="large")
+
     with camera_col:
-        context = webrtc_streamer(
-            key="sign-language-live-camera",
-            video_processor_factory=lambda: SignLanguageProcessor(model),
-            rtc_configuration={
-                "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
-            },
-            media_stream_constraints={
-                "video": {
-                    "width": {"ideal": 640},
-                    "height": {"ideal": 480},
-                    "frameRate": {"ideal": CAMERA_TARGET_FPS, "max": 20},
+        with st.container(border=True):
+            st.markdown("**CAMERA PREVIEW**")
+            context = webrtc_streamer(
+                key="sign-language-live-camera",
+                video_processor_factory=lambda: SignLanguageProcessor(model),
+                rtc_configuration={
+                    "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
                 },
-                "audio": False,
-            },
-            video_html_attrs={
-                "style": {
-                    "width": "100%",
-                    "maxWidth": "520px",
-                    "height": "auto",
-                    "margin": "0 auto",
-                    "borderRadius": "12px",
-                    "objectFit": "contain",
+                media_stream_constraints={
+                    "video": {
+                        "width": {"ideal": 640},
+                        "height": {"ideal": 480},
+                        "frameRate": {"ideal": CAMERA_TARGET_FPS, "max": 20},
+                    },
+                    "audio": False,
                 },
-                "controls": False,
-                "autoPlay": True,
-                "muted": True,
-                "playsInline": True,
-            },
-            async_processing=True,
-        )
-
-    @st.fragment(run_every="1s")
-    def show_live_status(webrtc_context):
-        processor = webrtc_context.video_processor if webrtc_context else None
-        if processor is None:
-            st.info("Camera is off. Press START in the preview to begin.")
-            return
-
-        status = processor.get_status()
-        st.metric("Recognized sign", status["label"] or "Listening…")
-        st.caption(status["message"])
-        st.progress(
-            min(status["frames_collected"] / SEQUENCE_LENGTH, 1.0),
-            text=f'Frame sequence: {status["frames_collected"]}/{SEQUENCE_LENGTH}',
-        )
-
-        if status["label"]:
-            st.success(f'{status["label"]} detected')
-            st.metric("Model confidence", f'{status["confidence"]:.1%}')
-        else:
-            st.caption(
-                "A result appears after the model has collected enough frames "
-                "and found a stable prediction."
+                video_html_attrs={
+                    "style": {
+                        "width": "100%",
+                        "maxWidth": "100%",
+                        "height": "auto",
+                        "aspectRatio": "4 / 3",
+                        "margin": "0 auto",
+                        "borderRadius": "14px",
+                        "objectFit": "contain",
+                        "backgroundColor": "#101d38",
+                    },
+                    "controls": False,
+                    "autoPlay": True,
+                    "muted": True,
+                    "playsInline": True,
+                },
+                async_processing=True,
             )
-
-        with st.expander("Show class probabilities"):
-            chart_data = {
-                ACTIONS[i]: float(status["probabilities"][i])
-                for i in range(len(ACTIONS))
-            }
-            st.bar_chart(chart_data, y_label="Model probability")
+            st.caption("Camera preview is kept compact to reduce screen clutter.")
 
     with result_col:
-        st.subheader("Live result")
-        show_live_status(context)
-        st.markdown("**Tips for better recognition**")
+        with st.container(border=True):
+            st.markdown("**RECOGNITION RESULT**")
+
+            @st.fragment(run_every="1s")
+            def show_live_status(webrtc_context):
+                processor = webrtc_context.video_processor if webrtc_context else None
+                if processor is None:
+                    st.info("Your camera is off. Press START in the preview.")
+                    st.markdown(
+                        """
+                        <div class="note-panel">
+                          Tip: sit about an arm's length from the camera and
+                          keep your hands inside the frame.
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    return
+
+                status = processor.get_status()
+                if status["label"]:
+                    st.success("SIGN RECOGNISED")
+                    st.markdown(
+                        f"<div style='font-family:Manrope,sans-serif;"
+                        f"font-size:2rem;font-weight:800;color:#142033;"
+                        f"line-height:1.2;padding:.25rem 0 .65rem 0;'>"
+                        f"{status['label']}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.metric("Model confidence", f'{status["confidence"]:.1%}')
+                else:
+                    st.markdown(
+                        "<div style='font-family:Manrope,sans-serif;"
+                        "font-size:1.8rem;font-weight:800;color:#64748b;"
+                        "padding:.35rem 0;'>Listening…</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.caption(status["message"])
+
+                st.progress(
+                    min(status["frames_collected"] / SEQUENCE_LENGTH, 1.0),
+                    text=f'Collecting sequence · {status["frames_collected"]}/{SEQUENCE_LENGTH} frames',
+                )
+
+                with st.expander("See model probabilities"):
+                    chart_data = {
+                        ACTIONS[i]: float(status["probabilities"][i])
+                        for i in range(len(ACTIONS))
+                    }
+                    st.bar_chart(chart_data, y_label="Probability")
+
+            show_live_status(context)
+
         st.markdown(
-            "- Face the camera with your upper body in view.\n"
-            "- Keep both hands inside the frame.\n"
-            "- Use steady lighting and a plain background.\n"
-            "- Hold one sign for 2–3 seconds before changing it."
-        )
-        st.caption(
-            "For smoother performance, the app uses a smaller camera frame "
-            "and processes up to 15 frames per second."
+            """
+            <div class="soft-panel" style="margin-top:.85rem;">
+              <div class="section-kicker">For a better result</div>
+              <p style="margin:.25rem 0;color:#526176;font-size:.88rem;line-height:1.65;">
+                ① Face the camera with your upper body visible.<br>
+                ② Keep the signing hand inside the frame.<br>
+                ③ Use even lighting and avoid a busy background.<br>
+                ④ Hold one sign steadily for 2–3 seconds.
+              </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
 with upload_tab:
-    st.subheader("Analyze a recorded sign")
-    st.write(
-        "Upload a short clip containing one sign. A 2–5 second video with "
-        "your face and both hands clearly visible is recommended."
+    st.markdown(
+        """
+        <div class="section-kicker">Video analysis</div>
+        <div class="section-heading">Test a recorded sign</div>
+        <div class="section-subtitle">
+          Prefer not to use your webcam? Upload a short clip showing one
+          sign clearly and analyze it here.
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-    uploaded_video = st.file_uploader(
-        "Choose a video", type=["mp4", "mov", "avi", "mkv"]
-    )
-    if uploaded_video is not None:
-        st.video(uploaded_video)
 
-    run_analysis = st.button(
-        "Analyze video",
-        type="primary",
-        disabled=uploaded_video is None,
-        use_container_width=True,
-    )
+    upload_left, upload_right = st.columns([1.05, 0.95], gap="large")
+    with upload_left:
+        with st.container(border=True):
+            uploaded_video = st.file_uploader(
+                "Choose a video file",
+                type=["mp4", "mov", "avi", "mkv"],
+                help="A 2–5 second clip with your face, upper body and hand visible is recommended.",
+            )
+            if uploaded_video is not None:
+                st.video(uploaded_video)
+            run_analysis = st.button(
+                "Analyze this video",
+                type="primary",
+                disabled=uploaded_video is None,
+                use_container_width=True,
+            )
+
+    with upload_right:
+        with st.container(border=True):
+            st.markdown("**BEFORE YOU UPLOAD**")
+            st.markdown(
+                """
+                - Record one sign per clip.
+                - Keep your face and hand inside the frame.
+                - Avoid fast camera movement.
+                - Use at least 30 frames; 2–5 seconds is recommended.
+                """
+            )
+            st.caption("Supported formats: MP4, MOV, AVI and MKV.")
+
     if run_analysis and uploaded_video is not None:
-        progress = st.progress(0, text="Preparing video...")
+        progress = st.progress(0, text="Preparing video…")
         try:
-            result = analyze_uploaded_video(uploaded_video.getvalue(), model, progress)
-            st.success("Video analysis complete.")
-            a, b, c = st.columns(3)
-            a.metric("Predicted sign", result["label"])
-            b.metric("Average confidence", f'{result["confidence"]:.1%}')
-            c.metric("Sequences analyzed", result["windows"])
-            st.bar_chart(
-                {
-                    ACTIONS[i]: float(result["probabilities"][i])
-                    for i in range(len(ACTIONS))
-                },
-                y_label="Average probability",
+            result = analyze_uploaded_video(
+                uploaded_video.getvalue(), model, progress
             )
-            st.caption(
-                f'Processed {result["frames"]} frames; landmarks were detected '
-                f'in {result["detected_frames"]} frames.'
-            )
+            st.success("Analysis complete")
+            first, second, third = st.columns(3)
+            first.metric("Predicted sign", result["label"])
+            second.metric("Average confidence", f'{result["confidence"]:.1%}')
+            third.metric("Sequences analyzed", result["windows"])
+            with st.container(border=True):
+                st.markdown("**MODEL PROBABILITIES**")
+                st.bar_chart(
+                    {
+                        ACTIONS[i]: float(result["probabilities"][i])
+                        for i in range(len(ACTIONS))
+                    },
+                    y_label="Average probability",
+                )
+                st.caption(
+                    f'Processed {result["frames"]} frames. '
+                    f'Landmarks were detected in {result["detected_frames"]} frames.'
+                )
         except Exception as exc:
             progress.empty()
             st.error(f"Could not analyze this video: {exc}")
 
-with about_tab:
-    st.subheader("How the model works")
+with learn_tab:
     st.markdown(
         """
-        1. **Landmark extraction:** MediaPipe Holistic detects pose, face, and hand landmarks.
-        2. **Feature vector:** Every frame becomes 1,662 numerical values.
-        3. **Temporal sequence:** The application groups 30 consecutive frames.
-        4. **LSTM classification:** The saved Keras model predicts one of the three trained signs.
-        """
-    )
-    st.markdown("**Input shape:** 30 × 1,662")
-    st.markdown("**Architecture:** stacked LSTM layers followed by dense layers")
-    st.warning(
-        "This is a prototype for three selected signs, not a general-purpose "
-        "sign-language translator. The original dataset has limited signer "
-        "diversity, so accuracy may vary with different people, lighting, "
-        "camera angles, and signing speed."
+        <div class="section-kicker">Quick sign guide</div>
+        <div class="section-heading">Learn the three signs</div>
+        <div class="section-subtitle">
+          Watch each short demonstration, then try the same movement in the
+          Live camera tab.
+        </div>
+        <div class="note-panel">
+          <strong>Language note:</strong> These are standard American Sign
+          Language (ASL) reference demonstrations, performed by a Deaf,
+          fluent signer. ASL is not Indian Sign Language (ISL). Your model
+          was trained on your own recorded examples, so its learned version
+          may differ from these references. Use the signs you recorded when
+          collecting your training data for the closest match.
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-st.divider()
-st.caption("Built with Streamlit, TensorFlow/Keras, MediaPipe Holistic, and streamlit-webrtc.")
+    sign_cols = st.columns(3, gap="large")
+    demos = [
+        {
+            "title": "Hello",
+            "meaning": "A greeting",
+            "gif": "https://framerusercontent.com/images/HftfOq15g9I2o0WYKNp2dhlDQ.gif",
+            "steps": "Hold your dominant hand flat, fingers together and palm facing outward. Start beside your forehead, then move the hand outward.",
+            "source": "https://www.aisa.solutions/asl/signs/hello",
+        },
+        {
+            "title": "Thanks",
+            "meaning": "Expressing gratitude",
+            "gif": "https://framerusercontent.com/images/AoHnODN1F23v0NRbKp04RFkuVo.gif",
+            "steps": "Touch the fingertips of your flat dominant hand to your lips, then move the hand forward and slightly down. A warm expression helps.",
+            "source": "https://www.aisa.solutions/asl/signs/thank-you",
+        },
+        {
+            "title": "I Love You",
+            "meaning": "Expressing affection",
+            "gif": "https://framerusercontent.com/images/G47vRLDlF9mb4epfbzYB3nsyZM.gif",
+            "steps": "Raise your dominant hand near shoulder height, palm facing outward. Extend your thumb, index finger and little finger; fold the middle and ring fingers.",
+            "source": "https://www.aisa.solutions/asl/signs/i-love-you",
+        },
+    ]
+
+    for column, demo in zip(sign_cols, demos):
+        with column:
+            st.markdown(
+                f"""
+                <div class="sign-card">
+                  <div class="sign-gif-wrap">
+                    <img src="{demo['gif']}" alt="Animated ASL demonstration for {demo['title']}" loading="lazy">
+                  </div>
+                  <div class="sign-card-body">
+                    <h3>{demo['title']}</h3>
+                    <div class="sign-meaning">{demo['meaning']}</div>
+                    <p>{demo['steps']}</p>
+                    <a class="demo-link" href="{demo['source']}" target="_blank" rel="noopener noreferrer">
+                      Open full demonstration ↗
+                    </a>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown(
+        """
+        <div class="footer-note">
+          Animated sign references: AISA School · ASL demonstrations by a Deaf,
+          fluent signer · Descriptions checked against Handspeak / Lifeprint.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(" ")
+    st.markdown("**Practice sequence**")
+    st.markdown(
+        "Watch one GIF → copy the sign slowly → open Live camera → hold the "
+        "gesture steadily → compare the model prediction with the sign you intended."
+    )
+
+with about_tab:
+    st.markdown(
+        """
+        <div class="section-kicker">Under the hood</div>
+        <div class="section-heading">How this recognition system works</div>
+        <div class="section-subtitle">
+          This project combines landmark-based computer vision with a
+          recurrent neural network for short motion sequences.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    info_left, info_right = st.columns(2, gap="large")
+    with info_left:
+        with st.container(border=True):
+            st.markdown("**THE INFERENCE PIPELINE**")
+            st.markdown(
+                """
+                1. MediaPipe Holistic detects pose, face and hand landmarks.
+                2. Each frame is converted into 1,662 numerical features.
+                3. A rolling window of 30 frames forms one input sequence.
+                4. The trained stacked-LSTM model predicts one of three classes.
+                """
+            )
+    with info_right:
+        with st.container(border=True):
+            st.markdown("**MODEL SPECIFICATION**")
+            st.markdown(
+                """
+                - Input: 30 × 1,662
+                - Architecture: 3 LSTM layers + 3 Dense layers
+                - Output: 3 class probabilities
+                - Classes: Hello, Thanks, I Love You
+                - Runtime: TensorFlow / Keras
+                """
+            )
+
+    st.warning(
+        "This is a prototype trained for three selected labels. It is not a "
+        "general-purpose sign-language translator and should not be used as "
+        "an authoritative interpreter. Accuracy can vary with signer, camera "
+        "angle, lighting, background and signing speed."
+    )
+
+st.markdown(
+    """
+    <div class="footer-note">
+      Sign Language Studio · Streamlit · TensorFlow / Keras · MediaPipe Holistic
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
