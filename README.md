@@ -48,7 +48,7 @@ The missing-pose fallback is set to 132 values (33 × 4), keeping every extracte
 ## How to use the app
 
 ### Live camera
-1. Open the Live camera tab.
+1. Choose the **Live camera** workspace.
 2. Click Start and grant camera permission in your browser.
 3. Keep your upper body, face, and hands visible.
 4. Perform one of the three trained signs and hold it steadily for around 2–3 seconds.
@@ -61,10 +61,10 @@ The missing-pose fallback is set to 132 values (33 × 4), keeping every extracte
 4. Use a 2–5 second clip with one sign clearly visible.
 5. Click Analyze this video.
 
-Use either live camera or uploaded-video inference at a time. Choose **Unload AI engine** after testing to clear the cached model.
+Use either live camera or uploaded-video inference at a time. Choose **Unload AI engine** after testing to clear the cached model. TensorFlow itself remains imported for the lifetime of the server process, so reboot the app from Manage app if its memory remains high after testing.
 
 ### Learn the signs
-Open the Learn the signs tab and choose Hello, Thanks, or I Love You from the selector. The app loads one animated reference at a time to reduce browser load, alongside its gesture description and source link.
+Choose the **Learn the signs** workspace and select Hello, Thanks, or I Love You. The app loads one animated reference at a time to reduce browser load, alongside its gesture description and source link.
 
 **Language note:** The embedded reference demonstrations are for American Sign Language (ASL). ASL is not Indian Sign Language (ISL), and sign languages vary by region and community. The model was trained on the project's own recorded examples; the reference demonstrations are learning aids and are not guaranteed to match the exact gestures in that training set.
 
