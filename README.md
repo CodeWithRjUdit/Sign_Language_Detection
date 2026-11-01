@@ -51,7 +51,7 @@ The missing-pose fallback is set to 132 values (33 × 4), keeping every extracte
 1. Open the Live camera tab.
 2. Click Start and grant camera permission in your browser.
 3. Keep your upper body, face, and hands visible.
-4. Perform one of the three trained signs and hold it steadily for around 1–2 seconds.
+4. Perform one of the three trained signs and hold it steadily for around 2–3 seconds.
 5. Read the predicted sign and model confidence below the video.
 
 ### Upload a video
@@ -67,6 +67,10 @@ The missing-pose fallback is set to 132 values (33 × 4), keeping every extracte
 - actions.h5 — retained original artifact; not required by the deployed inference app
 - Sign_Language_Detection.ipynb — original data preparation, training, and experimentation notebook
 - Final_Model.ipynb — final inference notebook
+
+## Live camera performance
+
+The live camera preview is constrained to a compact display (maximum 520 px wide). The browser is asked for a 640 × 480 camera stream at approximately 15 FPS (up to 20 FPS). Before landmark extraction, frames are resized so their longest side is at most 640 px. MediaPipe Holistic uses pose model complexity 0 to reduce CPU load, and the processor drops excess incoming frames rather than allowing a processing backlog to build up. These settings improve responsiveness on CPU-based hosting; actual frame rate still depends on available server resources and network conditions.
 
 ## Limitations
 
