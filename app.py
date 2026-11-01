@@ -756,57 +756,84 @@ with learn_tab:
         unsafe_allow_html=True,
     )
 
-    sign_cols = st.columns(3, gap="large")
-    demos = [
-        {
-            "title": "Hello",
+    demos = {
+        "Hello": {
             "meaning": "A greeting",
             "gif": "https://framerusercontent.com/images/HftfOq15g9I2o0WYKNp2dhlDQ.gif",
-            "steps": "Hold your dominant hand flat, fingers together and palm facing outward. Start beside your forehead, then move the hand outward.",
+            "steps": "Hold your dominant hand flat, fingers together and palm facing outward. Start beside your forehead, then move the hand outward and away from your head in one smooth movement.",
             "source": "https://www.aisa.solutions/asl/signs/hello",
         },
-        {
-            "title": "Thanks",
+        "Thanks": {
             "meaning": "Expressing gratitude",
             "gif": "https://framerusercontent.com/images/AoHnODN1F23v0NRbKp04RFkuVo.gif",
-            "steps": "Touch the fingertips of your flat dominant hand to your lips, then move the hand forward and slightly down. A warm expression helps.",
+            "steps": "Touch the fingertips of your flat dominant hand to your lips, then move the hand forward and slightly down toward the person you are thanking. A warm expression helps.",
             "source": "https://www.aisa.solutions/asl/signs/thank-you",
         },
-        {
-            "title": "I Love You",
+        "I Love You": {
             "meaning": "Expressing affection",
             "gif": "https://framerusercontent.com/images/G47vRLDlF9mb4epfbzYB3nsyZM.gif",
-            "steps": "Raise your dominant hand near shoulder height, palm facing outward. Extend your thumb, index finger and little finger; fold the middle and ring fingers.",
+            "steps": "Raise your dominant hand near shoulder height with the palm facing outward. Extend your thumb, index finger and little finger; fold the middle and ring fingers down. Hold the handshape still.",
             "source": "https://www.aisa.solutions/asl/signs/i-love-you",
         },
-    ]
+    }
 
-    for column, demo in zip(sign_cols, demos):
-        with column:
+    selected_sign = st.selectbox(
+        "Choose a sign to watch",
+        options=list(demos.keys()),
+        key="learn_sign_selector",
+    )
+    demo = demos[selected_sign]
+
+    demo_image_col, demo_steps_col = st.columns([1, 1], gap="large")
+    with demo_image_col:
+        with st.container(border=True):
+            st.markdown(f"**{selected_sign.upper()} · ANIMATED DEMONSTRATION**")
             st.markdown(
                 f"""
-                <div class="sign-card">
-                  <div class="sign-gif-wrap">
-                    <img src="{demo['gif']}" alt="Animated ASL demonstration for {demo['title']}" loading="lazy">
-                  </div>
-                  <div class="sign-card-body">
-                    <h3>{demo['title']}</h3>
-                    <div class="sign-meaning">{demo['meaning']}</div>
-                    <p>{demo['steps']}</p>
-                    <a class="demo-link" href="{demo['source']}" target="_blank" rel="noopener noreferrer">
-                      Open full demonstration ↗
-                    </a>
-                  </div>
+                <div class="sign-gif-wrap" style="min-height:300px;">
+                  <img
+                    src="{demo['gif']}"
+                    alt="Animated ASL demonstration for {selected_sign}"
+                    loading="eager"
+                    decoding="async"
+                    referrerpolicy="no-referrer"
+                  >
                 </div>
                 """,
                 unsafe_allow_html=True,
+            )
+            st.caption(
+                "Only the selected animation is loaded. Choose another sign "
+                "above to switch demonstrations."
+            )
+
+    with demo_steps_col:
+        with st.container(border=True):
+            st.markdown(f"### {selected_sign}")
+            st.markdown(
+                f"<div class='sign-meaning'>{demo['meaning']}</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown("**How to perform the sign**")
+            st.write(demo["steps"])
+            st.markdown(
+                f'<a class="demo-link" href="{demo["source"]}" '
+                'target="_blank" rel="noopener noreferrer">'
+                "Open the full demonstration ↗</a>",
+                unsafe_allow_html=True,
+            )
+            st.divider()
+            st.markdown("**Practice it**")
+            st.write(
+                "Watch the movement once, copy it slowly, then repeat it "
+                "naturally while keeping your hand and face visible."
             )
 
     st.markdown(
         """
         <div class="footer-note">
           Animated sign references: AISA School · ASL demonstrations by a Deaf,
-          fluent signer · Descriptions checked against Handspeak / Lifeprint.
+          fluent signer. ASL is different from Indian Sign Language (ISL).
         </div>
         """,
         unsafe_allow_html=True,
@@ -815,8 +842,9 @@ with learn_tab:
     st.markdown(" ")
     st.markdown("**Practice sequence**")
     st.markdown(
-        "Watch one GIF → copy the sign slowly → open Live camera → hold the "
-        "gesture steadily → compare the model prediction with the sign you intended."
+        "Choose one sign → watch the animation → copy the movement → open "
+        "Live camera → hold the sign steadily → compare the prediction with "
+        "the sign you intended."
     )
 
 with about_tab:
