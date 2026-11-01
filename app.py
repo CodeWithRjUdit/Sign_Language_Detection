@@ -56,7 +56,7 @@ def build_trained_architecture():
 
 
 def load_weights_file(model, source_path: Path, temp_dir: str):
-    """Load HDF5 weights via a filename Keras 3 recognizes as an H5 weights file."""
+    """Load either modern Keras 3 weights or legacy full-model HDF5 weights."""
     if not h5py.is_hdf5(source_path):
         with open(source_path, "rb") as file_handle:
             header = file_handle.read(16)
@@ -64,7 +64,21 @@ def load_weights_file(model, source_path: Path, temp_dir: str):
             f"{source_path.name} is not a readable HDF5 weights file. "
             f"File header: {header!r}"
         )
-    destination = Path(temp_dir) / "restored.weights.h5"
+
+    # Keras 3 uses a different reader for its native .weights.h5 layout and
+    # legacy HDF5 files produced by Keras 2. Detect the layout from HDF5 keys,
+    # then choose the extension that selects the matching Keras loader.
+    with h5py.File(source_path, "r") as h5_file:
+        root_keys = set(h5_file.keys())
+        is_keras3_weights = (
+            "layers" in root_keys
+            and "vars" in root_keys
+            and "model_weights" not in root_keys
+            and "layer_names" not in h5_file.attrs
+        )
+
+    filename = "restored.weights.h5" if is_keras3_weights else "restored_legacy.h5"
+    destination = Path(temp_dir) / filename
     shutil.copyfile(source_path, destination)
     model.load_weights(destination)
     return model
