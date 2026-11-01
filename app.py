@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import io
-import json
+import shutil
 import tempfile
 import threading
 import zipfile
@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import av
+import h5py
 import mediapipe as mp
 import numpy as np
 import streamlit as st
@@ -27,135 +28,129 @@ PREDICTION_INTERVAL = 5
 MODEL_LOCK = threading.Lock()
 
 
+def build_trained_architecture():
+    """Recreate the architecture exactly as defined in the training notebook."""
+    model = tf.keras.Sequential(
+        [
+            tf.keras.layers.Input(shape=(SEQUENCE_LENGTH, FEATURE_COUNT)),
+            tf.keras.layers.LSTM(
+                64, return_sequences=True, activation="relu", name="lstm_3"
+            ),
+            tf.keras.layers.LSTM(
+                128, return_sequences=True, activation="relu", name="lstm_4"
+            ),
+            tf.keras.layers.LSTM(
+                64, return_sequences=False, activation="relu", name="lstm_5"
+            ),
+            tf.keras.layers.Dense(64, activation="relu", name="dense_3"),
+            tf.keras.layers.Dense(32, activation="relu", name="dense_4"),
+            tf.keras.layers.Dense(
+                len(ACTIONS), activation="softmax", name="dense_5"
+            ),
+        ],
+        name="sequential_1",
+    )
+    # Build variables before loading the stored parameter tensors.
+    model(tf.zeros((1, SEQUENCE_LENGTH, FEATURE_COUNT), dtype=tf.float32))
+    return model
+
+
+def load_weights_file(model, source_path: Path, temp_dir: str):
+    """Load HDF5 weights via a filename Keras 3 recognizes as an H5 weights file."""
+    if not h5py.is_hdf5(source_path):
+        with open(source_path, "rb") as file_handle:
+            header = file_handle.read(16)
+        raise ValueError(
+            f"{source_path.name} is not a readable HDF5 weights file. "
+            f"File header: {header!r}"
+        )
+    destination = Path(temp_dir) / "restored.weights.h5"
+    shutil.copyfile(source_path, destination)
+    model.load_weights(destination)
+    return model
+
+
 @st.cache_resource(show_spinner="Loading the trained LSTM model...")
 def load_model() -> Any:
     if not MODEL_PATH.exists():
         raise FileNotFoundError("Keep my_model.keras in the repository root.")
 
-    # First try standard whole-model deserialization after normalizing legacy
-    # initializer metadata and the removed RNN time_major option.
-    standard_error = None
+    errors = []
     with tempfile.TemporaryDirectory(prefix="sign_model_") as temp_dir:
-        try:
-            with zipfile.ZipFile(MODEL_PATH, "r") as source_zip:
-                names = source_zip.namelist()
-                if "config.json" not in names:
-                    raise ValueError("The .keras archive does not contain config.json.")
-                config = json.loads(source_zip.read("config.json").decode("utf-8"))
-
-                def normalize_legacy_config(value):
-                    if isinstance(value, dict):
-                        if (
-                            value.get("class_name") == "Orthogonal"
-                            and str(value.get("module", "")).startswith("keras.initializers")
-                        ):
-                            return "orthogonal"
-                        normalized = {}
-                        for key, item in value.items():
-                            if key == "time_major":
-                                continue
-                            normalized[key] = normalize_legacy_config(item)
-                        return normalized
-                    if isinstance(value, list):
-                        return [normalize_legacy_config(item) for item in value]
-                    return value
-
-                repaired_config = normalize_legacy_config(config)
-                repaired_path = Path(temp_dir) / "model_compatible.keras"
-                with zipfile.ZipFile(
-                    repaired_path, "w", compression=zipfile.ZIP_DEFLATED
-                ) as repaired_zip:
-                    for item in source_zip.infolist():
-                        contents = source_zip.read(item.filename)
-                        if item.filename == "config.json":
-                            contents = json.dumps(repaired_config).encode("utf-8")
-                        repaired_zip.writestr(item, contents)
-
-                weight_members = [
-                    name for name in names
-                    if name.endswith(".h5") and "weights" in name.lower()
-                ]
-                if not weight_members:
-                    weight_members = [name for name in names if name.endswith(".h5")]
-
-                if not weight_members:
-                    raise ValueError(
-                        "The .keras archive contains no HDF5 weight file."
-                    )
-
-                extracted_weights = Path(temp_dir) / "restored.weights.h5"
-                extracted_weights.write_bytes(source_zip.read(weight_members[0]))
-
+        # The training notebook may have produced a legacy HDF5 model despite
+        # the .keras suffix. Detect the real file format by its contents,
+        # rather than trusting the filename extension.
+        if h5py.is_hdf5(MODEL_PATH):
+            model = build_trained_architecture()
             try:
-                loaded = tf.keras.models.load_model(
-                    repaired_path,
-                    compile=False,
-                )
+                model = load_weights_file(model, MODEL_PATH, temp_dir)
             except Exception as exc:
-                standard_error = exc
-                # The notebook defines this exact Sequential architecture.
-                # Rebuilding it explicitly allows Keras to load the embedded
-                # HDF5 weight file by layer topology rather than the serialized
-                # object graph that failed above.
-                loaded = tf.keras.Sequential(
-                    [
-                        tf.keras.layers.Input(shape=(SEQUENCE_LENGTH, FEATURE_COUNT)),
-                        tf.keras.layers.LSTM(
-                            64, return_sequences=True, activation="relu", name="lstm_3"
-                        ),
-                        tf.keras.layers.LSTM(
-                            128, return_sequences=True, activation="relu", name="lstm_4"
-                        ),
-                        tf.keras.layers.LSTM(
-                            64, return_sequences=False, activation="relu", name="lstm_5"
-                        ),
-                        tf.keras.layers.Dense(64, activation="relu", name="dense_3"),
-                        tf.keras.layers.Dense(32, activation="relu", name="dense_4"),
-                        tf.keras.layers.Dense(
-                            len(ACTIONS), activation="softmax", name="dense_5"
-                        ),
-                    ],
-                    name="sequential_1",
-                )
-                loaded.load_weights(extracted_weights)
+                errors.append(f"my_model.keras HDF5 weights: {exc!r}")
+                model = None
+        elif zipfile.is_zipfile(MODEL_PATH):
+            model = None
+            try:
+                with zipfile.ZipFile(MODEL_PATH, "r") as source_zip:
+                    candidates = [
+                        name for name in source_zip.namelist()
+                        if name.endswith(".weights.h5") or name.endswith("model.weights.h5")
+                    ]
+                    if not candidates:
+                        candidates = [
+                            name for name in source_zip.namelist()
+                            if name.endswith(".h5")
+                        ]
+                    if not candidates:
+                        raise ValueError(
+                            "The .keras archive contains no embedded HDF5 weights."
+                        )
+                    embedded = Path(temp_dir) / "embedded.weights.h5"
+                    embedded.write_bytes(source_zip.read(candidates[0]))
 
-        except Exception as archive_error:
-            # Some copies of this project also contain actions.h5. It may be
-            # an earlier full-model HDF5 export, so use it as a final fallback.
+                model = build_trained_architecture()
+                model = load_weights_file(model, embedded, temp_dir)
+            except Exception as exc:
+                errors.append(f"my_model.keras archive weights: {exc!r}")
+                model = None
+        else:
+            with open(MODEL_PATH, "rb") as file_handle:
+                header = file_handle.read(32)
+            errors.append(
+                "my_model.keras is neither a valid .keras ZIP archive nor "
+                f"an HDF5 file. Header: {header!r}"
+            )
+            model = None
+
+        # The second repository artifact is also tried as a weights source.
+        # Loading weights into the notebook-defined architecture avoids
+        # deserializing its legacy Orthogonal initializer configuration.
+        if model is None:
             legacy_path = ROOT / "actions.h5"
-            if legacy_path.exists():
+            if legacy_path.exists() and h5py.is_hdf5(legacy_path):
                 try:
-                    loaded = tf.keras.models.load_model(
-                        legacy_path,
-                        compile=False,
-                    )
-                except Exception as legacy_error:
-                    raise RuntimeError(
-                        "Could not load my_model.keras using either whole-model "
-                        "deserialization or the notebook's explicit LSTM "
-                        "architecture/embedded weights. The actions.h5 fallback "
-                        f"also failed. Standard loader: {standard_error!r}; "
-                        f"weight/archive loader: {archive_error!r}; "
-                        f"actions.h5 loader: {legacy_error!r}"
-                    ) from legacy_error
-            else:
-                raise RuntimeError(
-                    "Could not load my_model.keras. "
-                    f"Whole-model loader: {standard_error!r}; "
-                    f"archive/weight loader: {archive_error!r}"
-                ) from archive_error
+                    model = build_trained_architecture()
+                    model = load_weights_file(model, legacy_path, temp_dir)
+                except Exception as exc:
+                    errors.append(f"actions.h5 weights: {exc!r}")
+                    model = None
 
-    shape = loaded.input_shape
+        if model is None:
+            raise RuntimeError(
+                "Unable to restore the trained parameters. "
+                + " | ".join(errors)
+            )
+
+    shape = model.input_shape
     if len(shape) != 3 or tuple(shape[1:]) != (SEQUENCE_LENGTH, FEATURE_COUNT):
         raise ValueError(
             f"Expected model input (None, {SEQUENCE_LENGTH}, {FEATURE_COUNT}), "
             f"but found {shape}."
         )
-    if int(loaded.output_shape[-1]) != len(ACTIONS):
+    if int(model.output_shape[-1]) != len(ACTIONS):
         raise ValueError(
-            f"Expected three output classes, but found {loaded.output_shape[-1]}."
+            f"Expected three output classes, but found {model.output_shape[-1]}."
         )
-    return loaded
+    return model
 
 
 def create_holistic_model():
