@@ -70,7 +70,7 @@ The missing-pose fallback is set to 132 values (33 × 4), keeping every extracte
 
 ## Live camera performance
 
-The live camera preview is constrained to a compact display (maximum 520 px wide). The browser is asked for a 640 × 480 camera stream at approximately 15 FPS (up to 20 FPS). Before landmark extraction, frames are resized so their longest side is at most 640 px. MediaPipe Holistic uses pose model complexity 0 to reduce CPU load, and the processor drops excess incoming frames rather than allowing a processing backlog to build up. These settings improve responsiveness on CPU-based hosting; actual frame rate still depends on available server resources and network conditions.
+The live camera preview is constrained to a compact display (maximum 520 px wide). The browser is asked for a 640 × 480 camera stream at approximately 15 FPS (up to 20 FPS). Before landmark extraction, frames are resized so their longest side is at most 640 px. MediaPipe Holistic uses pose model complexity 1 (the bundled full model) to avoid a runtime model download into the read-only package directory, and the processor drops excess incoming frames rather than allowing a processing backlog to build up. These settings improve responsiveness on CPU-based hosting; actual frame rate still depends on available server resources and network conditions.
 
 ## Limitations
 
