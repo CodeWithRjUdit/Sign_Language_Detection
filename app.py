@@ -633,9 +633,9 @@ if active_view == "Live camera":
                     },
                     media_stream_constraints={
                         "video": {
-                            "width": {"ideal": 640},
-                            "height": {"ideal": 480},
-                            "frameRate": {"ideal": CAMERA_TARGET_FPS, "max": 20},
+                            "width": {"ideal": 480},
+                            "height": {"ideal": 360},
+                            "frameRate": {"ideal": CAMERA_TARGET_FPS, "max": 10},
                         },
                         "audio": False,
                     },
@@ -824,7 +824,7 @@ elif active_view == "Learn the signs":
         <div class="section-heading">Learn the three signs</div>
         <div class="section-subtitle">
           Watch each short demonstration, then try the same movement in the
-          Live camera tab.
+          Live camera workspace.
         </div>
         <div class="note-panel">
           <strong>Language note:</strong> These are standard American Sign
