@@ -275,6 +275,7 @@ class SignLanguageProcessor(VideoProcessorBase):
         self.lock = threading.Lock()
         self.status = {
             "label": None,
+            "candidate": None,
             "confidence": 0.0,
             "probabilities": np.zeros(len(ACTIONS), dtype=np.float32),
             "frames_collected": 0,
@@ -316,6 +317,7 @@ class SignLanguageProcessor(VideoProcessorBase):
             with self.lock:
                 self.status = {
                     "label": None,
+                    "candidate": None,
                     "confidence": 0.0,
                     "probabilities": np.zeros(len(ACTIONS), dtype=np.float32),
                     "frames_collected": 0,
@@ -343,13 +345,19 @@ class SignLanguageProcessor(VideoProcessorBase):
             confidence = float(average[voted_index])
 
             if votes >= 3 and confidence >= CONFIDENCE_THRESHOLD:
-                label, message = ACTIONS[voted_index], "Sign recognized"
+                label, candidate = ACTIONS[voted_index], ACTIONS[voted_index]
+                message = "Sign recognized"
             else:
-                label, message = None, "Analyzing — hold the sign steady"
+                label = None
+                candidate_index = int(np.argmax(average))
+                candidate = ACTIONS[candidate_index]
+                confidence = float(average[candidate_index])
+                message = "Possible match — hold the sign steady"
 
             with self.lock:
                 self.status = {
                     "label": label,
+                    "candidate": candidate,
                     "confidence": confidence,
                     "probabilities": average,
                     "frames_collected": len(self.sequence),
@@ -362,8 +370,12 @@ class SignLanguageProcessor(VideoProcessorBase):
         else:
             headline = current["message"]
 
+        displayed_label = current["label"]
+        if displayed_label is None and current.get("candidate"):
+            displayed_label = f"Possible: {current['candidate']}"
+
         return self._video_frame(
-            overlay(rgb, headline, current["label"], current["confidence"])
+            overlay(rgb, headline, displayed_label, current["confidence"])
         )
 
 
@@ -625,6 +637,20 @@ with live_tab:
                         unsafe_allow_html=True,
                     )
                     st.metric("Model confidence", f'{status["confidence"]:.1%}')
+                elif status.get("candidate"):
+                    st.caption("TOP CANDIDATE · NOT YET CONFIRMED")
+                    st.markdown(
+                        f"<div style='font-family:Manrope,sans-serif;"
+                        f"font-size:1.8rem;font-weight:800;color:#2757d8;"
+                        f"line-height:1.2;padding:.25rem 0 .45rem 0;'>"
+                        f"{status['candidate']}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.metric("Top-class probability", f'{status["confidence"]:.1%}')
+                    st.caption(
+                        "This is the model's current best guess, not a confirmed "
+                        "recognition. Keep the sign steady for a more stable result."
+                    )
                 else:
                     st.markdown(
                         "<div style='font-family:Manrope,sans-serif;"
