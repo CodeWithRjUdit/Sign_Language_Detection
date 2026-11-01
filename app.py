@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import io
+import json
+import tempfile
 import threading
+import zipfile
 from collections import Counter, deque
 from pathlib import Path
 from typing import Any
@@ -28,18 +31,51 @@ MODEL_LOCK = threading.Lock()
 def load_model() -> Any:
     if not MODEL_PATH.exists():
         raise FileNotFoundError("Keep my_model.keras in the repository root.")
-    # The saved notebook model serializes the built-in Orthogonal
-    # initializer with a legacy-style config. Register the built-in class
-    # explicitly so Keras 3 can deserialize the LSTM recurrent initializer.
-    keras_compat_objects = {
-        "Orthogonal": tf.keras.initializers.Orthogonal,
-        "keras.initializers>Orthogonal": tf.keras.initializers.Orthogonal,
-    }
-    loaded = tf.keras.models.load_model(
-        MODEL_PATH,
-        compile=False,
-        custom_objects=keras_compat_objects,
-    )
+    # Older .keras archives may serialize built-in initializers with
+    # legacy metadata (module/registered_name/shared_object_id) that some
+    # Keras 3 loaders do not accept through initializers.get(). Normalize
+    # only the Orthogonal initializer in a temporary copy of config.json.
+    # The stored model.weights.h5 file is copied byte-for-byte.
+    with tempfile.TemporaryDirectory(prefix="sign_model_") as temp_dir:
+        with zipfile.ZipFile(MODEL_PATH, "r") as source_zip:
+            names = source_zip.namelist()
+            if "config.json" not in names:
+                raise ValueError("The .keras archive does not contain config.json.")
+            config = json.loads(source_zip.read("config.json").decode("utf-8"))
+
+            def normalize_orthogonal(value):
+                if isinstance(value, dict):
+                    if (
+                        value.get("class_name") == "Orthogonal"
+                        and str(value.get("module", "")).startswith("keras.initializers")
+                    ):
+                        # The saved recurrent weights replace this initializer
+                        # during loading; the canonical string is sufficient.
+                        return "orthogonal"
+                    return {
+                        key: normalize_orthogonal(item)
+                        for key, item in value.items()
+                    }
+                if isinstance(value, list):
+                    return [normalize_orthogonal(item) for item in value]
+                return value
+
+            repaired_config = normalize_orthogonal(config)
+            repaired_model_path = Path(temp_dir) / "model_compatible.keras"
+
+            with zipfile.ZipFile(
+                repaired_model_path, "w", compression=zipfile.ZIP_DEFLATED
+            ) as repaired_zip:
+                for item in source_zip.infolist():
+                    contents = source_zip.read(item.filename)
+                    if item.filename == "config.json":
+                        contents = json.dumps(repaired_config).encode("utf-8")
+                    repaired_zip.writestr(item, contents)
+
+        loaded = tf.keras.models.load_model(
+            repaired_model_path,
+            compile=False,
+        )
     shape = loaded.input_shape
     if len(shape) != 3 or tuple(shape[1:]) != (SEQUENCE_LENGTH, FEATURE_COUNT):
         raise ValueError(
