@@ -503,11 +503,21 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+model = None
+model_error = None
 try:
     model = load_model()
 except Exception as exc:
-    st.error(f"The trained model could not be loaded: {exc}")
-    st.stop()
+    model_error = str(exc)
+
+if model is None:
+    with st.container(border=True):
+        st.warning(
+            "Preview mode: the sign guide is available, but live recognition "
+            "and video analysis are paused because the trained model did not load."
+        )
+        with st.expander("View model-loading details"):
+            st.code(model_error or "Unknown model-loading error.")
 
 st.markdown(
     """
@@ -543,39 +553,43 @@ with live_tab:
     with camera_col:
         with st.container(border=True):
             st.markdown("**CAMERA PREVIEW**")
-            context = webrtc_streamer(
-                key="sign-language-live-camera",
-                video_processor_factory=lambda: SignLanguageProcessor(model),
-                rtc_configuration={
-                    "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
-                },
-                media_stream_constraints={
-                    "video": {
-                        "width": {"ideal": 640},
-                        "height": {"ideal": 480},
-                        "frameRate": {"ideal": CAMERA_TARGET_FPS, "max": 20},
+            if model is None:
+                context = None
+                st.info("Camera recognition will be available when the model loads.")
+            else:
+                context = webrtc_streamer(
+                    key="sign-language-live-camera",
+                    video_processor_factory=lambda: SignLanguageProcessor(model),
+                    rtc_configuration={
+                        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
                     },
-                    "audio": False,
-                },
-                video_html_attrs={
-                    "style": {
-                        "width": "100%",
-                        "maxWidth": "100%",
-                        "height": "auto",
-                        "aspectRatio": "4 / 3",
-                        "margin": "0 auto",
-                        "borderRadius": "14px",
-                        "objectFit": "contain",
-                        "backgroundColor": "#101d38",
+                    media_stream_constraints={
+                        "video": {
+                            "width": {"ideal": 640},
+                            "height": {"ideal": 480},
+                            "frameRate": {"ideal": CAMERA_TARGET_FPS, "max": 20},
+                        },
+                        "audio": False,
                     },
-                    "controls": False,
-                    "autoPlay": True,
-                    "muted": True,
-                    "playsInline": True,
-                },
-                async_processing=True,
-            )
-            st.caption("Camera preview is kept compact to reduce screen clutter.")
+                    video_html_attrs={
+                        "style": {
+                            "width": "100%",
+                            "maxWidth": "100%",
+                            "height": "auto",
+                            "aspectRatio": "4 / 3",
+                            "margin": "0 auto",
+                            "borderRadius": "14px",
+                            "objectFit": "contain",
+                            "backgroundColor": "#101d38",
+                        },
+                        "controls": False,
+                        "autoPlay": True,
+                        "muted": True,
+                        "playsInline": True,
+                    },
+                    async_processing=True,
+                )
+                st.caption("Camera preview is kept compact to reduce screen clutter.")
 
     with result_col:
         with st.container(border=True):
@@ -583,6 +597,9 @@ with live_tab:
 
             @st.fragment(run_every="1s")
             def show_live_status(webrtc_context):
+                if model is None:
+                    st.warning("Live recognition is paused until the trained model loads.")
+                    return
                 processor = webrtc_context.video_processor if webrtc_context else None
                 if processor is None:
                     st.info("Your camera is off. Press START in the preview.")
@@ -666,13 +683,14 @@ with upload_tab:
                 "Choose a video file",
                 type=["mp4", "mov", "avi", "mkv"],
                 help="A 2–5 second clip with your face, upper body and hand visible is recommended.",
+                disabled=model is None,
             )
             if uploaded_video is not None:
                 st.video(uploaded_video)
             run_analysis = st.button(
                 "Analyze this video",
                 type="primary",
-                disabled=uploaded_video is None,
+                disabled=uploaded_video is None or model is None,
                 use_container_width=True,
             )
 
